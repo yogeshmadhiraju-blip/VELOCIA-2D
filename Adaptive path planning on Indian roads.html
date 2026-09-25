@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Adaptive path planning on Indian roads</title>
+<style>
+:root{--bg:#f4f5f2;--card:#fff;--tx:#1b1f1c;--mut:#5d655f;--bd:#d9ddd6;--ac:#0b6e4f;--acx:#fff;--bad:#c5221f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121513;--card:#1b1f1c;--tx:#eaeee9;--mut:#9ba59d;--bd:#2c332e;--ac:#59c79d;--acx:#0d1a14;--bad:#f28b82}}
+:root[data-theme="dark"]{--bg:#121513;--card:#1b1f1c;--tx:#eaeee9;--mut:#9ba59d;--bd:#2c332e;--ac:#59c79d;--acx:#0d1a14;--bad:#f28b82}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.55 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+.w{max-width:920px;margin:0 auto;padding:16px}
+h1{font-size:1.45rem;line-height:1.25;margin:4px 0 6px;letter-spacing:-.01em}
+h2{font-size:1.1rem;margin:26px 0 8px}
+.sub,.hint{color:var(--mut);margin:0 0 12px;max-width:70ch}
+canvas{display:block;width:100%;aspect-ratio:2/1;border-radius:10px;border:1px solid var(--bd);touch-action:manipulation;background:#7d8b5f}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+button{font:inherit;padding:9px 14px;min-height:40px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+button[aria-pressed="true"]{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:8px 0}
+.ctl label{display:block;font-size:.9rem;color:var(--mut)}
+.ctl input[type=range]{width:100%}
+.ctl b{color:var(--tx)}
+.st{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:12px 0}
+.st div{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 12px}
+.st span{display:block;font-size:.8rem;color:var(--mut)}
+.st strong{font-size:1.35rem}
+#coll{color:var(--bad)}
+.info{font-weight:600;min-height:1.5em}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.cards div{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 14px}
+.cards h3{margin:0 0 4px;font-size:1rem}
+.cards p{margin:0;color:var(--mut)}
+.lg{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--mut);font-size:.9rem}
+.lg i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.note{margin-top:22px;padding-top:12px;border-top:1px solid var(--bd);color:var(--mut);font-size:.88rem}
+label.ck{display:inline-flex;gap:6px;align-items:center;color:var(--tx);font-size:.92rem}
+.safe{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.pill{padding:3px 12px;border-radius:99px;font-weight:600;font-size:.9rem;color:#fff}
+.t0{background:#188038}.t1{background:#b06a00}.t2{background:#d45a00}.t3{background:#c5221f}.t4{background:#5d655f}
+.brk{font-size:.9rem;color:var(--mut);margin:0 0 10px;max-width:420px}.brk b{color:var(--tx)}
+.trk{height:8px;border-radius:4px;background:var(--bd);margin-top:4px;overflow:hidden}.trk i{display:block;height:100%;width:0}
+.console{background:#0d1210;border:1px solid var(--bd);border-radius:8px;margin:14px 0;overflow:hidden}
+:root[data-theme="light"] .console{background:#12312a}
+.console h4{margin:0;padding:8px 12px;font-size:.85rem;color:#9fe6c4;background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.08);font-weight:600;letter-spacing:.02em;display:flex;justify-content:space-between;align-items:center}
+.console h4 button{background:transparent;border:1px solid rgba(255,255,255,.25);color:#9fe6c4;padding:2px 9px;min-height:auto;font-size:.75rem;border-radius:6px}
+#log{list-style:none;margin:0;padding:6px 0;max-height:170px;overflow-y:auto;font:12.5px/1.5 "SF Mono",Consolas,monospace}
+#log li{padding:3px 12px;color:#b9c2bc;display:flex;gap:8px;white-space:pre}
+#log li b{color:#6fd39a;font-weight:600;flex:0 0 auto}
+#log li.w2{color:#ffd166}#log li.w3{color:#ff8a7a}
+#log:empty::after{content:'Waiting for events...';display:block;padding:3px 12px;color:#5d655f}
+</style></head><body><div class="w">
+<h1>Adaptive path planning on an unstructured road</h1>
+<p class="sub">A 2D prototype. The blue vehicle drives left to right through mixed traffic with no lanes. Compare a plain planner with an adaptive one, on the same starting traffic.</p>
+<canvas id="c" aria-label="Road simulation"></canvas>
+<p class="hint">Tap or click the road to drop a stray cow that blocks the way for 10 seconds.</p>
+<div class="row" role="group" aria-label="Planner mode">
+<button id="mA" aria-pressed="true">Adaptive planner</button>
+<button id="mB" aria-pressed="false">Basic A* (baseline)</button>
+<button id="bP">Pause</button><button id="bR">Restart</button><button id="bS">Speed 1x</button>
+</div>
+<div class="ctl">
+<label>Traffic on the road: <b id="vD">8</b><input id="rD" type="range" min="0" max="18" value="8"></label>
+<label>Safety margin: <b id="vM">1.0x</b><input id="rM" type="range" min="0.5" max="2" step="0.1" value="1"></label>
+<div class="row" style="margin:0"><label class="ck"><input id="kP" type="checkbox" checked> Show planned path</label><label class="ck"><input id="kR" type="checkbox"> Show risk zones</label></div>
+</div>
+<div class="safe"><span class="pill t0" id="pill">Safe</span><span class="info" id="info">Clear road</span></div>
+<div class="brk">Braking force on passengers: <b id="bT">None</b><div class="trk"><i id="bF" class="t0"></i></div></div>
+<div class="st">
+<div><span>Trips completed</span><strong id="sT">0</strong></div>
+<div><span>Collisions</span><strong id="coll">0</strong></div>
+<div><span>Emergency stops</span><strong id="sB">0</strong></div>
+<div><span>Vehicle speed</span><strong id="sV">0%</strong></div>
+</div>
+<div class="console"><h4>Event console <button id="clg">Clear</button></h4><ul id="log" aria-live="polite"></ul></div>
+<div class="lg"><span><i style="background:#f57c00"></i>Two-wheeler</span><span><i style="background:#f9ab00"></i>Auto</span><span><i style="background:#8e24aa"></i>Pedestrian</span><span><i style="background:#795548"></i>Cow</span><span><i style="background:#22262b"></i>Pothole</span><span><i style="background:#1a73e8"></i>Our vehicle</span></div>
+
+<h2>How it works</h2>
+<div class="cards">
+<div><h3>See</h3><p>The vehicle needs to know where the road is drivable and where obstacles are and how they move. Here the simulator supplies that inside the faint cone in front of the vehicle, which is its sensor range. On a real vehicle a camera with object detection and road segmentation would.</p></div>
+<div><h3>Plan</h3><p>A* searches a grid for the cheapest route. Cells near obstacles and potholes cost more, so the path bends around them. Adaptive mode also adds where each obstacle will be half a second from now, uses bigger margins for pedestrians and two-wheelers, and replans about five times a second.</p></div>
+<div><h3>Protect</h3><p>When an obstacle is detected the vehicle reacts in steps: it slows gently and steers around it, brakes firmly if the gap keeps closing, and makes an emergency stop only as a last resort. Braking force is capped at each step so passengers are not thrown forward. The baseline never brakes.</p></div>
+</div>
+<h2>Try this comparison</h2>
+<p class="sub">Set traffic to 10 and let Basic A* run for two minutes. Note the collisions. Switch to Adaptive: it restarts with the same starting traffic, so the comparison is fair. Change the safety margin and watch the trade between safety and trips completed.</p>
+<p class="note">Built with AI assistance as a teaching prototype. The planner and traffic behaviours are simplified, and the results are not a safety validation.</p>
+</div>
+<script>
+const W=800,H=400,C=16,GX=W/C,GY=H/C,RT=40,RB=360,ER=8,VMAX=1.9,SENS=150,NAME={bike:'two-wheeler',auto:'auto',ped:'pedestrian',cow:'cow'};
+const cv=document.getElementById('c'),cx=cv.getContext('2d'),$=id=>document.getElementById(id);
+const TY={bike:{r:6,col:'#f57c00',v:[1,1.6],m:1.6,wv:1,L:'B'},auto:{r:10,col:'#f9ab00',v:[.6,1],m:1.2,wv:.3,L:'A'},ped:{r:5,col:'#8e24aa',v:[.3,.5],m:2.2,wv:0,L:'P'},cow:{r:12,col:'#795548',v:[.1,.3],m:1.5,wv:0,L:'C'}};
+const S={run:true,mode:'adaptive',dens:8,mar:1,path:true,risk:false,spd:1,trips:0,coll:0,brakes:0,frame:0,bc:0,info:'',tier:0,dec:0,turn:0,det:[],crit:null,logMode:0,logOn:true};
+let rng,obs=[],holes=[],ego,path=null;
+function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rr=(a,b)=>a+rng()*(b-a);
+function fit(){const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);cx.setTransform(cv.width/W,0,0,cv.height/H,0,0)}
+function mk(k,x,y,tmp){const T=TY[k],sp=rr(T.v[0],T.v[1]);const o={k,x:x!==undefined?x:rr(60,W-60),y:y!==undefined?y:rr(RT+14,RB-14),vx:0,vy:0,sp,dir:rng()<.5?-1:1,ph:rr(0,6.28),hit:0,tmp:!!tmp,life:tmp?600:0};if(k==='ped')o.vy=sp*(rng()<.5?-1:1);return o}
+function sync(){const b=obs.filter(o=>!o.tmp);while(b.length<S.dens){const r=rng(),k=r<.45?'bike':r<.65?'auto':r<.85?'ped':'cow',o=mk(k);obs.push(o);b.push(o)}while(b.length>S.dens){const o=b.pop();obs.splice(obs.indexOf(o),1)}}
+function stepObs(o){const T=TY[o.k];if(o.hit>0)o.hit--;
+if(o.tmp){o.life--;o.vx=o.vy=0;return}
+if(o.k==='bike'||o.k==='auto'){o.vx=o.dir*o.sp;o.vy=Math.cos(S.frame*.04+o.ph)*T.wv*.9;
+const dx=ego.x-o.x,dy=ego.y-o.y,d=Math.hypot(dx,dy),lim=T.r+ER+30;
+if(d<lim&&dx*o.dir>0){o.vy+=(dy>=0?-1:1)*1.2*(1.3-d/lim);o.vx*=Math.max(.3,d/lim)}}
+else if(o.k==='ped'){o.vx=0;if(o.y<RT+8)o.vy=Math.abs(o.vy);if(o.y>RB-8)o.vy=-Math.abs(o.vy)}
+else{if(rng()<.006)o.vx=(rng()-.5)*.6;o.vy=Math.sin(S.frame*.01+o.ph)*.15}
+o.x+=o.vx;o.y+=o.vy;o.y=Math.max(RT+T.r+2,Math.min(RB-T.r-2,o.y));
+if(o.x<-20)o.x=W+20;if(o.x>W+20)o.x=-20}
+const riskR=o=>TY[o.k].r+ER+(S.mode==='adaptive'?14*TY[o.k].m*S.mar:2);
+function buildCost(){const ad=S.mode==='adaptive',c=new Float32Array(GX*GY);
+for(let j=0;j<GY;j++)for(let i=0;i<GX;i++){const x=i*C+C/2,y=j*C+C/2;let v=1;if(y<RT+6||y>RB-6)v=1e4;
+for(const p of holes){const d=Math.hypot(x-p.x,y-p.y);if(ad){if(d<p.r+10)v+=6;if(d<p.r+2)v+=20}else if(d<p.r+2)v+=10}
+for(const o of obs){const T=TY[o.k],R=riskR(o),sp=ad?[[o.x,o.y,1],[o.x+o.vx*30,o.y+o.vy*30,1],[o.x+o.vx*60,o.y+o.vy*60,.5]]:[[o.x,o.y,1]];
+for(const s of sp){const d=Math.hypot(x-s[0],y-s[1]);if(d<R){v+=(ad?12:1000)*(1-d/R)*s[2];if(d<T.r+ER)v+=60*s[2]}}}
+c[j*GX+i]=v}return c}
+function astar(cost,s,g){const N=GX*GY,gs=new Float32Array(N).fill(1e9),par=new Int32Array(N).fill(-1),cl=new Uint8Array(N),hp=[];
+const push=(f,n)=>{hp.push([f,n]);let i=hp.length-1;while(i>0){const p=(i-1)>>1;if(hp[p][0]<=hp[i][0])break;[hp[p],hp[i]]=[hp[i],hp[p]];i=p}};
+const pop=()=>{const t=hp[0],l=hp.pop();if(hp.length){hp[0]=l;let i=0;for(;;){const a=2*i+1,b=a+1;let m=i;if(a<hp.length&&hp[a][0]<hp[m][0])m=a;if(b<hp.length&&hp[b][0]<hp[m][0])m=b;if(m===i)break;[hp[m],hp[i]]=[hp[i],hp[m]];i=m}}return t};
+const h=n=>Math.hypot(n%GX-g[0],((n/GX)|0)-g[1]),sn=s[1]*GX+s[0],gn=g[1]*GX+g[0];gs[sn]=0;push(h(sn),sn);
+while(hp.length){const n=pop()[1];if(cl[n])continue;cl[n]=1;if(n===gn)break;const ci=n%GX,cj=(n/GX)|0;
+for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){if(!di&&!dj)continue;const ni=ci+di,nj=cj+dj;if(ni<0||nj<0||ni>=GX||nj>=GY)continue;const m=nj*GX+ni;if(cl[m])continue;const t=gs[n]+(di&&dj?1.414:1)*cost[m];if(t<gs[m]){gs[m]=t;par[m]=n;push(t+h(m),m)}}}
+if(par[gn]<0&&sn!==gn)return null;const p=[];for(let n=gn;n!==-1;n=par[n])p.push([n%GX*C+C/2,((n/GX)|0)*C+C/2]);return p.reverse()}
+function plan(){const c=buildCost(),s=[Math.max(0,Math.min(GX-1,ego.x/C|0)),Math.max(0,Math.min(GY-1,ego.y/C|0))];path=astar(c,s,[GX-2,12])}
+function newTrip(){ego={x:28,y:200,h:0,v:0,t:0,fl:0};for(const o of obs)if(!o.tmp&&Math.abs(o.x-ego.x)<90&&Math.abs(o.y-ego.y)<70)o.x+=150;path=null;plan()}
+function resetAll(){rng=mul(7);S.frame=0;S.trips=S.coll=S.brakes=S.bc=S.tier=S.dec=S.turn=0;S.det=[];S.crit=null;S.logMode=0;if($('log'))$('log').innerHTML='';obs=[];holes=[];for(let i=0;i<6;i++)holes.push({x:rr(120,700),y:rr(RT+20,RB-20),r:rr(6,10)});sync();newTrip();ui()}
+function follow(){if(!path||path.length<2)return;let bi=0,bd=1e9;for(let i=0;i<path.length;i++){const d=Math.hypot(path[i][0]-ego.x,path[i][1]-ego.y);if(d<bd){bd=d;bi=i}}
+const t=path[Math.min(bi+3,path.length-1)];let df=Math.atan2(t[1]-ego.y,t[0]-ego.x)-ego.h;while(df>Math.PI)df-=2*Math.PI;while(df<-Math.PI)df+=2*Math.PI;const mt=.09-.03*ego.v/VMAX,dl=Math.max(-mt,Math.min(mt,df));ego.h+=dl;S.turn=S.turn*.9+dl*.1}
+function targetSpeed(){S.det=[];S.crit=null;
+if(S.mode!=='adaptive'){S.tier=0;S.info='Baseline: plans once, never brakes';return VMAX}
+let gap=1e9,near=0,tf=1,ttcMin=1e9,crit=null;const fx=Math.cos(ego.h),fy=Math.sin(ego.h);
+for(const o of obs){const dx=o.x-ego.x,dy=o.y-ego.y,T=TY[o.k],d=Math.hypot(dx,dy);if(d<110)near++;
+const al=dx*fx+dy*fy,lat=Math.abs(-dx*fy+dy*fx);if(d<SENS&&(al>-10||d<45))S.det.push(o);
+if(al>0&&lat<T.r+ER+10*S.mar){const g=al-T.r-ER,cs=ego.v-(o.vx*fx+o.vy*fy),ttc=cs>.05?g/cs:1e9;if(g<gap){gap=g;crit=o}if(ttc<ttcMin)ttcMin=ttc;if(cs>.05&&ttc<70)tf=Math.min(tf,Math.max(0,ttc/70))}}
+const t=(gap<28||ttcMin<35)?3:(ttcMin<70||gap<60)?2:(gap<130||ttcMin<120)?1:0;S.tier=t;S.crit=crit;
+const f=Math.min(tf,Math.min(1,Math.max(0,(gap-14)/(60+ego.v*30)))),nm=crit?NAME[crit.k]:'',tr=S.turn<-.01?'left':S.turn>.01?'right':'';
+S.info=t===3?'Emergency stop: '+nm+' very close':t===2?'Braking firmly: '+nm+' ahead':t===1?(tr?'Slowing and steering '+tr+' around the '+nm:'Obstacle detected: slowing for the '+nm):S.det.length?(tr?'Steering '+tr+' to keep clear':'Tracking '+S.det.length+' nearby'):near>=3?'Dense traffic: reduced top speed':'Clear road';
+return VMAX/(1+.12*near)*f}
+function step(){S.frame++;obs.forEach(stepObs);obs=obs.filter(o=>!(o.tmp&&o.life<=0));ego.t++;
+const need=S.mode==='adaptive'?(S.frame%12===0||!path):(!path&&S.frame%20===0);if(need)plan();
+follow();const tv=path?targetSpeed():0;if(!path){S.info='No safe path found: waiting';S.tier=2;S.det=[];S.crit=null}
+const dv=tv-ego.v,ac=dv>0?Math.min(dv,.03):Math.max(dv,-[.05,.05,.1,.17][S.tier]);S.dec=Math.max(0,-ac);ego.v+=ac;
+if(S.mode==='adaptive'&&S.tier===3&&S.bc<=0){S.brakes++;S.bc=60}S.bc--;
+ego.x+=Math.cos(ego.h)*ego.v;ego.y+=Math.sin(ego.h)*ego.v;ego.y=Math.max(RT+ER,Math.min(RB-ER,ego.y));if(ego.fl>0)ego.fl--;
+for(const o of obs){if(o.hit<=0&&Math.hypot(o.x-ego.x,o.y-ego.y)<TY[o.k].r+ER-1){S.coll++;o.hit=120;ego.fl=25;log('COLLISION with '+NAME[o.k],'w3')}}
+if(ego.x>W-24){S.trips++;log('Trip '+S.trips+' complete \u2014 goal reached');newTrip()}else if(ego.t>3000)newTrip()}
+function draw(){cx.clearRect(0,0,W,H);cx.fillStyle='#7d8b5f';cx.fillRect(0,0,W,H);cx.fillStyle='#4b5058';cx.fillRect(0,RT,W,RB-RT);
+cx.fillStyle='#c9b98a';cx.fillRect(0,RT-3,W,3);cx.fillRect(0,RB,W,3);
+cx.strokeStyle='rgba(255,255,255,.16)';cx.lineWidth=2;cx.setLineDash([14,26]);cx.beginPath();cx.moveTo(0,200);cx.lineTo(W,200);cx.stroke();cx.setLineDash([]);
+cx.fillStyle='#34a853';cx.fillRect(W-22,RT,4,RB-RT);cx.fillStyle='#fff';cx.font='11px sans-serif';cx.fillText('GOAL',W-46,RT+14);
+cx.fillStyle='#22262b';for(const p of holes){cx.beginPath();cx.arc(p.x,p.y,p.r,0,7);cx.fill()}
+if(S.risk){for(const o of obs){const R=riskR(o);cx.fillStyle='rgba(217,48,37,.16)';cx.beginPath();cx.arc(o.x,o.y,R,0,7);cx.fill();
+if(S.mode==='adaptive'){cx.strokeStyle='rgba(255,255,255,.5)';cx.lineWidth=1;cx.setLineDash([3,3]);cx.beginPath();cx.arc(o.x+o.vx*30,o.y+o.vy*30,R*.7,0,7);cx.stroke();cx.setLineDash([])}}}
+if(S.path&&path){cx.strokeStyle='#7fe0b5';cx.lineWidth=3;cx.beginPath();path.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1]));cx.stroke()}
+cx.font='bold 9px sans-serif';cx.textAlign='center';
+for(const o of obs){const T=TY[o.k];cx.fillStyle=T.col;cx.beginPath();cx.arc(o.x,o.y,T.r,0,7);cx.fill();
+if(o.vx||o.vy){cx.strokeStyle='#fff';cx.lineWidth=1.5;cx.beginPath();cx.moveTo(o.x,o.y);cx.lineTo(o.x+o.vx*14,o.y+o.vy*14);cx.stroke()}
+cx.fillStyle='#fff';cx.fillText(T.L,o.x,o.y+3)}
+cx.textAlign='start';
+if(S.mode==='adaptive'){cx.fillStyle='rgba(255,255,255,.06)';cx.beginPath();cx.moveTo(ego.x,ego.y);cx.arc(ego.x,ego.y,SENS,ego.h-1.05,ego.h+1.05);cx.closePath();cx.fill();
+cx.lineWidth=2;cx.strokeStyle=S.tier>=2?'#ff5a4f':'#ffc233';for(const o of S.det){cx.beginPath();cx.arc(o.x,o.y,TY[o.k].r+4,0,7);cx.stroke()}
+if(S.crit&&S.tier>0){cx.setLineDash([5,4]);cx.beginPath();cx.moveTo(ego.x,ego.y);cx.lineTo(S.crit.x,S.crit.y);cx.stroke();cx.setLineDash([])}}
+cx.save();cx.translate(ego.x,ego.y);cx.rotate(ego.h);cx.fillStyle='#1a73e8';cx.fillRect(-11,-6,22,12);cx.fillStyle='#bcd6fb';cx.fillRect(2,-4,6,8);if(S.dec>.02){cx.fillStyle='#ff3b30';cx.fillRect(-12,-6,3,4);cx.fillRect(-12,2,3,4)}
+if(ego.fl>0){cx.fillStyle='rgba(217,48,37,.55)';cx.beginPath();cx.arc(0,0,17,0,7);cx.fill()}cx.restore()}
+function log(msg,cls){const l=$('log');if(!l||!S.logOn)return;const li=document.createElement('li');
+if(cls)li.className=cls;const t=(S.frame/60).toFixed(1);li.innerHTML='<b>['+t+'s]</b> '+msg;l.appendChild(li);
+while(l.children.length>60)l.removeChild(l.firstChild);l.scrollTop=l.scrollHeight}
+function ui(){
+if(S.tier!==S.logMode){const nm=S.crit?NAME[S.crit.k]:'';
+if(S.tier===1&&S.logMode<1)log('Obstacle detected'+(nm?' ('+nm+')':'')+' \u2014 slowing, planning around it','w2');
+else if(S.tier===2&&S.logMode<2)log('Gap closing'+(nm?' with '+nm:'')+' \u2014 braking firmly','w2');
+else if(S.tier===3)log('EMERGENCY STOP \u2014 '+nm+' too close','w3');
+else if(S.tier<S.logMode)log('Path clear \u2014 resuming normal speed');
+S.logMode=S.tier}$('sT').textContent=S.trips;$('coll').textContent=S.coll;$('sB').textContent=S.brakes;$('sV').textContent=Math.round(ego.v/VMAX*100)+'%';$('info').textContent=S.info;
+const ad=S.mode==='adaptive',lv=S.dec<.01?0:S.dec<.06?1:S.dec<.11?2:3;
+$('pill').textContent=ad?['Safe','Caution','Warning','Emergency'][S.tier]:'No safety layer';$('pill').className='pill t'+(ad?S.tier:4);
+$('bT').textContent=['None','Comfortable','Firm','Hard'][lv];$('bF').className='t'+lv;$('bF').style.width=Math.min(100,S.dec/.17*100)+'%'}
+let last=0,acc=0;
+function loop(t){const dt=Math.min(50,t-last);last=t;if(S.run){acc+=dt*S.spd;while(acc>=16.67){step();acc-=16.67}}draw();if(S.frame%6===0)ui();requestAnimationFrame(loop)}
+function setMode(m){S.mode=m;$('mA').setAttribute('aria-pressed',m==='adaptive');$('mB').setAttribute('aria-pressed',m!=='adaptive');resetAll()}
+$('mA').onclick=()=>setMode('adaptive');$('mB').onclick=()=>setMode('basic');
+$('bP').onclick=e=>{S.run=!S.run;e.target.textContent=S.run?'Pause':'Resume'};
+$('bR').onclick=resetAll;$('clg').onclick=()=>{$('log').innerHTML=''};
+$('bS').onclick=e=>{S.spd=S.spd%3+1;e.target.textContent='Speed '+S.spd+'x'};
+$('rD').oninput=e=>{S.dens=+e.target.value;$('vD').textContent=S.dens;sync()};
+$('rM').oninput=e=>{S.mar=+e.target.value;$('vM').textContent=S.mar.toFixed(1)+'x'};
+$('kP').onchange=e=>S.path=e.target.checked;$('kR').onchange=e=>S.risk=e.target.checked;
+cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;if(y>RT+12&&y<RB-12&&x>60)obs.push(mk('cow',x,y,true))});
+window.addEventListener('resize',fit);fit();resetAll();requestAnimationFrame(loop);
+</script></body></html>
